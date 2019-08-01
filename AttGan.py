@@ -71,13 +71,24 @@ class AttGan():
 
                 rec_loss = tf.reduce_mean((rec_a - self.X_src)**2) + tf.reduce_mean((rec_b - self.X_src)**2)
                 gen_d_loss = tf.reduce_mean((_d_a - 1)**2) + tf.reduce_mean((_d_b - 1)**2)
-                att_loss = tf.reduce_mean((att_a - self.X_att_a)**2) + tf.reduce_mean((att_b - self.X_att_b)**2)
-
-                self.loss_g = 1.0*rec_loss + 0.5*gen_d_loss
-                self.loss_d = 1.0*tf.reduce_mean((_d_a + 1)**2) + 1.0*tf.reduce_mean((_d_b + 1)**2) + 0.5*att_loss
+                att_loss_a = tf.reduce_mean((att_a - self.X_att_a)**2)
+                att_loss_b = tf.reduce_mean((att_b - self.X_att_b)**2)
+                #gp = self._gradient_penalty(self.X_src, rec_a)
+                
+                self.loss_g = 20.0*rec_loss + 10.0*att_loss_b + 5.0*gen_d_loss
+                self.loss_d = 0.5*tf.reduce_mean((_d_a + 1)**2) + 0.5*tf.reduce_mean((_d_b + 1)**2) + 1.0*att_loss_a# + 15.0*gp
 
                 self.op_train_g = optimizer_g.minimize(self.loss_g, var_list=self.Gparams)
-                self.op_train_d = optimizer_d.minimize(self.loss_d, var_list=self.Dparams)
+                grad_d = optimizer_d.compute_gradients(self.loss_d, var_list=self.Dparams)
+                grad_d_ = []
+                for grad, var in grad_d:
+                    if len(grad.get_shape().as_list()) == 4:
+                        grad_ = tf.clip_by_norm(grad, 1e-14, axes=[1, 2, 3])
+                    else:
+                        grad_ = tf.clip_by_norm(grad, 1e-14, axes=[1])
+                    grad_d_.append((grad_, var))
+                    
+                self.op_train_d = optimizer_d.apply_gradients(grad_d_)
 
                 self.sess = tf.Session()
                 self.sess.run(tf.global_variables_initializer())
@@ -118,6 +129,16 @@ class AttGan():
         with self.graph.as_default():
             self.saver.restore(self.sess, path)
             print("Attgan was restored.")
+            
+    def _gradient_penalty(self, x_a, x_b):
+        alpha = tf.random_uniform(shape=tf.shape(x_a), minval=0., maxval=1.)
+        inter = x_a + alpha * (x_b - x_a)
+        d = D()
+        pred, _ = d.build(inter, self.params)
+        grad = tf.gradients([pred], inter)[0]
+        norm = tf.norm(tf.reshape(grad, shape=(tf.shape(x_a)[0], 96*96*3)), axis=1)
+        gp = tf.reduce_mean((norm - 1)**2)
+        return gp
 
     def _kl_divergence(self, _from, _to):
         with tf.name_scope("kl"):
@@ -168,8 +189,8 @@ class AttGan():
             params["W5_fc_d"] = tf.Variable(tf.random_normal((6*6*32, 128)), dtype=tf.float32)
             params["b5_fc_d"] = tf.Variable(tf.random_normal((1, 128)), dtype=tf.float32)
 
-            params["W6_fc_d"] = tf.Variable(tf.random_normal((128, 2)), dtype=tf.float32)
-            params["b6_fc_d"] = tf.Variable(tf.random_normal((1, 2)), dtype=tf.float32)
+            params["W6_fc_d"] = tf.Variable(tf.random_normal((128, 1)), dtype=tf.float32)
+            params["b6_fc_d"] = tf.Variable(tf.random_normal((1, 1)), dtype=tf.float32)
 
             params["W5_fc_att"] = tf.Variable(tf.random_normal((6*6*32, 128)), dtype=tf.float32)
             params["b5_fc_att"] = tf.Variable(tf.random_normal((1, 128)), dtype=tf.float32)
