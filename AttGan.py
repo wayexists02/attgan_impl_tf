@@ -21,6 +21,15 @@ class AttGan():
         self.graph = None
         self.sess = None
         self.saver = None
+        
+        self.X_src = []
+        self.X_att_a = []
+        self.X_att_b = []
+        
+        self.loss_g = None
+        self.loss_d = None
+        
+        self.reconstructed = None
 
     def __del__(self):
         if self.sess is not None:
@@ -33,89 +42,128 @@ class AttGan():
         self.graph = tf.Graph()
 
         with self.graph.as_default():
+            self.params = self._init_parameters()
             
-            with tf.name_scope("attgan"):
-                self.X_src, self.X_att_a, self.X_att_b = self._init_placeholder()
-                self.params = self._init_parameters()
+            gp = tf.Variable(GP, dtype=tf.float32)
+            self.Dparams.append(gp)
 
-                optimizer_g = tf.train.AdamOptimizer(learning_rate=self.eta)
-                optimizer_d = tf.train.AdamOptimizer(learning_rate=self.eta)
+            optimizer_g = tf.train.AdamOptimizer(learning_rate=self.eta)
+            optimizer_d = tf.train.AdamOptimizer(learning_rate=self.eta)
+            
+            reconstructed_list = []
+            g_grad_var_pairs = []
+            d_grad_var_pairs = []
+            
+            loss_g_list = []
+            loss_d_list = []
+            
+            for i in range(len(GPU_INDEX)):
+                with tf.device(f"/gpu:{i}"):
+                    with tf.name_scope(f"attgan_{i}"):
+                        X_src, X_att_a, X_att_b = self._init_placeholder()
 
-                print("Building generator...")
+                        self.X_src.append(X_src)
+                        self.X_att_a.append(X_att_a)
+                        self.X_att_b.append(X_att_b)
 
-                enc = Genc()
-                Z = enc.build(self.X_src, self.params)
+                        print(f"Building generator {i}...")
 
-                Z_a = tf.concat([Z, tf.tile(tf.reshape(self.X_att_a, (tf.shape(self.X_att_a)[0], 1, 1, tf.shape(self.X_att_a)[1])), [1, 6, 6, 1])], axis=3)
-                Z_b = tf.concat([Z, tf.tile(tf.reshape(self.X_att_b, (tf.shape(self.X_att_b)[0], 1, 1, tf.shape(self.X_att_b)[1])), [1, 6, 6, 1])], axis=3)
-                
-                dec_a = Gdec()
-                rec_a = dec_a.build(Z_a, self.params)
+                        enc = Genc()
+                        Z = enc.build(X_src, self.params)
 
-                dec_b = Gdec()
-                rec_b = dec_b.build(Z_b, self.params)
-                
-                self.reconstructed = rec_b
+                        Z_a = tf.concat([Z, tf.tile(tf.reshape(X_att_a, (tf.shape(X_att_a)[0], 1, 1, tf.shape(X_att_a)[1])), [1, 6, 6, 1])], axis=3)
+                        Z_b = tf.concat([Z, tf.tile(tf.reshape(X_att_b, (tf.shape(X_att_b)[0], 1, 1, tf.shape(X_att_b)[1])), [1, 6, 6, 1])], axis=3)
 
-                print("Generator was built.")
+                        dec_a = Gdec()
+                        rec_a = dec_a.build(Z_a, self.params, enc.layers)
 
-                print("Building discriminator...")
+                        dec_b = Gdec()
+                        rec_b = dec_b.build(Z_b, self.params, enc.layers)
 
-                d_a = D()
-                _d_a, att_a = d_a.build(rec_a, self.params)
-                
-                d_b = D()
-                _d_b, att_b = d_b.build(rec_b, self.params)
+                        reconstructed_list.append(rec_b)
 
-                print("Discriminator was built.")
+                        print(f"Generator {i} was built.")
 
-                rec_loss = tf.reduce_mean((rec_a - self.X_src)**2) + tf.reduce_mean((rec_b - self.X_src)**2)
-                gen_d_loss = tf.reduce_mean((_d_a - 1)**2) + tf.reduce_mean((_d_b - 1)**2)
-                att_loss_a = tf.reduce_mean((att_a - self.X_att_a)**2)
-                att_loss_b = tf.reduce_mean((att_b - self.X_att_b)**2)
-                #gp = self._gradient_penalty(self.X_src, rec_a)
-                
-                self.loss_g = 20.0*rec_loss + 10.0*att_loss_b + 5.0*gen_d_loss
-                self.loss_d = 0.5*tf.reduce_mean((_d_a + 1)**2) + 0.5*tf.reduce_mean((_d_b + 1)**2) + 1.0*att_loss_a# + 15.0*gp
+                        print(f"Building discriminator {i}...")
 
-                self.op_train_g = optimizer_g.minimize(self.loss_g, var_list=self.Gparams)
-                grad_d = optimizer_d.compute_gradients(self.loss_d, var_list=self.Dparams)
-                grad_d_ = []
-                for grad, var in grad_d:
-                    if len(grad.get_shape().as_list()) == 4:
-                        grad_ = tf.clip_by_norm(grad, 1e-14, axes=[1, 2, 3])
-                    else:
-                        grad_ = tf.clip_by_norm(grad, 1e-14, axes=[1])
-                    grad_d_.append((grad_, var))
+                        d_a = D()
+                        _d_a, att_a = d_a.build(rec_a, self.params)
+
+                        d_b = D()
+                        _d_b, att_b = d_b.build(rec_b, self.params)
+
+                        print(f"Discriminator {i} was built.")
+
+                        rec_loss = tf.reduce_mean((rec_a - X_src)**2) + tf.reduce_mean((rec_b - X_src)**2)
+                        gen_d_loss = tf.reduce_mean((_d_a - 1)**2) + tf.reduce_mean((_d_b - 1)**2)
+                        dis_d_loss = tf.reduce_mean((_d_a + 1)**2) + tf.reduce_mean((_d_b + 1)**2)
+                        att_loss_a = tf.reduce_mean((att_a - X_att_a)**2)
+                        att_loss_b = tf.reduce_mean((att_b - X_att_b)**2)
+
+                        loss_g = 25.0*rec_loss + 10.0*att_loss_b + 1.0*gen_d_loss
+                        loss_d = 0.5*dis_d_loss + 1.0*att_loss_a + 15.0*(gp**2)
+
+                        loss_g_list.append(loss_g)
+                        loss_d_list.append(loss_d)
+
+                        g_grad_var_pair = optimizer_g.compute_gradients(loss_g, var_list=self.Gparams)
+                        d_grad_var_pair = self._compute_discriminator_gradients(optimizer_d, loss_d, gp)
+
+                        g_grad_var_pairs.append(g_grad_var_pair)
+                        d_grad_var_pairs.append(d_grad_var_pair)
                     
-                self.op_train_d = optimizer_d.apply_gradients(grad_d_)
+            self.reconstructed = tf.concat(reconstructed_list, axis=0)
+                    
+            g_avg_grad_var_pair = self._average_gradients(g_grad_var_pairs)
+            d_avg_grad_var_pair = self._average_gradients(d_grad_var_pairs)
+            
+            self.op_train_g = optimizer_g.apply_gradients(g_avg_grad_var_pair)
+            self.op_train_d = optimizer_d.apply_gradients(d_avg_grad_var_pair)
+            
+            self.loss_g = tf.reduce_mean(loss_g_list)
+            self.loss_d = tf.reduce_mean(loss_d_list)
 
-                self.sess = tf.Session()
-                self.sess.run(tf.global_variables_initializer())
+            self.sess = tf.Session()
+            self.sess.run(tf.global_variables_initializer())
 
-                self.saver = tf.train.Saver()
+            self.saver = tf.train.Saver()
 
         print("Attgan was built.")
 
     def step(self, X_src, X_att_a, X_att_b):
+        
+        X_src_dict = self._divide_placeholder(self.X_src, X_src)
+        X_att_a_dict = self._divide_placeholder(self.X_att_a, X_att_a)
+        X_att_b_dict = self._divide_placeholder(self.X_att_b, X_att_b)
+        
         with self.graph.as_default():
-            feed_dict = {
-                    self.X_src: X_src,
-                    self.X_att_a: X_att_a,
-                    self.X_att_b: X_att_b
-            }
+            feed_dict = dict()
+            
+            for k in X_src_dict:
+                feed_dict[k] = X_src_dict[k]
+            for k in X_att_a_dict:
+                feed_dict[k] = X_att_a_dict[k]
+            for k in X_att_b_dict:
+                feed_dict[k] = X_att_b_dict[k]
+                
             _, loss_g = self.sess.run([self.op_train_g, self.loss_g], feed_dict=feed_dict)
             _, loss_d = self.sess.run([self.op_train_d, self.loss_d], feed_dict=feed_dict)
-#             print(self.sess.run(self.reconstructed, feed_dict=feed_dict)[0,0])
 
         return loss_g, loss_d
 
     def convert(self, X_src, X_att):
+        
+        X_src_dict = self._divide_placeholder(self.X_src, X_src)
+        X_att_dict = self._divide_placeholder(self.X_att_b, X_att)
+        
         with self.graph.as_default():
-            feed_dict = {
-                    self.X_src: X_src,
-                    self.X_att_b: X_att
-            }
+            feed_dict = dict()
+            
+            for k in X_src_dict:
+                feed_dict[k] = X_src_dict[k]
+            for k in X_att_dict:
+                feed_dict[k] = X_att_dict[k]
+                
             reconstructed = self.sess.run(self.reconstructed, feed_dict=feed_dict)
 
         return reconstructed
@@ -130,21 +178,59 @@ class AttGan():
             self.saver.restore(self.sess, path)
             print("Attgan was restored.")
             
-    def _gradient_penalty(self, x_a, x_b):
-        alpha = tf.random_uniform(shape=tf.shape(x_a), minval=0., maxval=1.)
-        inter = x_a + alpha * (x_b - x_a)
-        d = D()
-        pred, _ = d.build(inter, self.params)
-        grad = tf.gradients([pred], inter)[0]
-        norm = tf.norm(tf.reshape(grad, shape=(tf.shape(x_a)[0], 96*96*3)), axis=1)
-        gp = tf.reduce_mean((norm - 1)**2)
-        return gp
-
-    def _kl_divergence(self, _from, _to):
-        with tf.name_scope("kl"):
-            kl = tf.reduce_mean(_from * tf.log((_from + 1e-8)/(_to + 1e-8)))
-
-        return kl
+    def _divide_placeholder(self, tensor, placeholder):
+        n = placeholder.shape[0]
+        size = n // len(GPU_INDEX)
+        
+        placeholder_dict = dict()
+        
+        for i in range(len(GPU_INDEX)):
+            start = i*size
+            end = (i+1)*size
+            
+            if i == len(GPU_INDEX) - 1:
+                end = n
+                
+            placeholder_dict[tensor[i]] = placeholder[start:end]
+            
+        return placeholder_dict
+            
+    def _compute_discriminator_gradients(self, optimizer, loss, gp):
+        grad_var_pair = optimizer.compute_gradients(loss, var_list=self.Dparams)
+        new_grad_var_pair = []
+        
+        for grad, var in grad_var_pair:
+            if var is not gp:
+                _grad = tf.where(tf.norm(grad) < 1e-22, tf.zeros_like(grad), tf.clip_by_norm(grad, gp))
+            else:
+                _grad = grad
+                
+            new_grad_var_pair.append((_grad, var))
+            
+        return new_grad_var_pair
+    
+    def _average_gradients(self, grad_var_pairs):
+        avg_grad_var_pair = []
+        
+        for grad_var_list in zip(*grad_var_pairs):
+            avg_grad = 0.0
+            var = None
+            
+            cnt = 0
+            
+            for _grad, _var in grad_var_list:
+                var = _var
+                if _grad is None:
+                    continue
+                avg_grad += _grad
+                cnt += 1
+                
+            if cnt > 0:
+                avg_grad = avg_grad / cnt
+                
+            avg_grad_var_pair.append((avg_grad, var))
+            
+        return avg_grad_var_pair
 
     def _init_parameters(self):
         params = dict()

@@ -21,6 +21,7 @@ class DataLoader():
 
     def build(self):
         self._read_file_list()
+#         self._check_file()
         self.num_batches = int(np.ceil(self.num_images / self.batch_size))
 
         print(f"Number of images: {self.num_images}")
@@ -40,6 +41,22 @@ class DataLoader():
                 attr = list(map(int, splited[1:]))
 
                 self.data.append((file_name, attr))
+                
+    def _check_file(self):
+        num_invalid = 0
+        invalid_list = []
+        
+        for i, tup in enumerate(self.data):
+            file_name = tup[0]
+            if not os.path.exists(file_name):
+                invalid_list.append(i)
+                self.num_images -= 1
+                num_invalid += 1
+                
+        for idx in reversed(invalid_list):
+            del self.data[idx]
+                
+        print(f"Number of invalid file: {num_invalid}")
 
     def next_batch(self):
         np.random.shuffle(self.data)
