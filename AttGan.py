@@ -71,8 +71,8 @@ class AttGan():
                         enc = Genc()
                         Z = enc.build(X_src, self.params)
 
-                        Z_a = tf.concat([Z, tf.tile(tf.reshape(X_att_a, (tf.shape(X_att_a)[0], 1, 1, tf.shape(X_att_a)[1])), [1, 6, 6, 1])], axis=3)
-                        Z_b = tf.concat([Z, tf.tile(tf.reshape(X_att_b, (tf.shape(X_att_b)[0], 1, 1, tf.shape(X_att_b)[1])), [1, 6, 6, 1])], axis=3)
+                        Z_a = tf.concat([Z, tf.tile(tf.reshape(X_att_a, (tf.shape(X_att_a)[0], 1, 1, tf.shape(X_att_a)[1])), [1, 12, 12, 1])], axis=3)
+                        Z_b = tf.concat([Z, tf.tile(tf.reshape(X_att_b, (tf.shape(X_att_b)[0], 1, 1, tf.shape(X_att_b)[1])), [1, 12, 12, 1])], axis=3)
 
                         dec_a = Gdec()
                         rec_a = dec_a.build(Z_a, self.params, enc.layers)
@@ -247,18 +247,24 @@ class AttGan():
             
             params["W4_enc"] = tf.Variable(tf.random_normal((5, 5, 32, 32)), dtype=tf.float32)
             params["b4_enc"] = tf.Variable(tf.random_normal((1, 1, 1, 32)), dtype=tf.float32)
+            
+            params["W5_enc"] = tf.Variable(tf.random_normal((5, 5, 32, 64)), dtype=tf.float32)
+            params["b5_enc"] = tf.Variable(tf.random_normal((1, 1, 1, 64)), dtype=tf.float32)
 
-            params["W1_dec"] = tf.Variable(tf.random_normal((5, 5, 32, 32+self.num_att)), dtype=tf.float32)
+            params["W1_dec"] = tf.Variable(tf.random_normal((5, 5, 32, 64+self.num_att)), dtype=tf.float32)
             params["b1_dec"] = tf.Variable(tf.random_normal((1, 1, 1, 32)), dtype=tf.float32)
 
-            params["W2_dec"] = tf.Variable(tf.random_normal((5, 5, 16, 32)), dtype=tf.float32)
-            params["b2_dec"] = tf.Variable(tf.random_normal((1, 1, 1, 16)), dtype=tf.float32)
+            params["W2_dec"] = tf.Variable(tf.random_normal((5, 5, 32, 32)), dtype=tf.float32)
+            params["b2_dec"] = tf.Variable(tf.random_normal((1, 1, 1, 32)), dtype=tf.float32)
 
-            params["W3_dec"] = tf.Variable(tf.random_normal((5, 5, 16, 16)), dtype=tf.float32)
+            params["W3_dec"] = tf.Variable(tf.random_normal((5, 5, 16, 32)), dtype=tf.float32)
             params["b3_dec"] = tf.Variable(tf.random_normal((1, 1, 1, 16)), dtype=tf.float32)
 
-            params["W4_dec"] = tf.Variable(tf.random_normal((5, 5, 3, 16)), dtype=tf.float32)
-            params["b4_dec"] = tf.Variable(tf.random_normal((1, 1, 1, 3)), dtype=tf.float32)
+            params["W4_dec"] = tf.Variable(tf.random_normal((5, 5, 16, 16)), dtype=tf.float32)
+            params["b4_dec"] = tf.Variable(tf.random_normal((1, 1, 1, 16)), dtype=tf.float32)
+
+            params["W5_dec"] = tf.Variable(tf.random_normal((5, 5, 3, 16)), dtype=tf.float32)
+            params["b5_dec"] = tf.Variable(tf.random_normal((1, 1, 1, 3)), dtype=tf.float32)
             
             params["W1_d"] = tf.Variable(tf.random_normal((5, 5, 3, 16)), dtype=tf.float32)
             params["b1_d"] = tf.Variable(tf.random_normal((1, 1, 1, 16)), dtype=tf.float32)
@@ -272,17 +278,26 @@ class AttGan():
             params["W4_d"] = tf.Variable(tf.random_normal((5, 5, 32, 32)), dtype=tf.float32)
             params["b4_d"] = tf.Variable(tf.random_normal((1, 1, 1, 32)), dtype=tf.float32)
 
-            params["W5_fc_d"] = tf.Variable(tf.random_normal((6*6*32, 128)), dtype=tf.float32)
-            params["b5_fc_d"] = tf.Variable(tf.random_normal((1, 128)), dtype=tf.float32)
+            params["W5_d"] = tf.Variable(tf.random_normal((5, 5, 32, 64)), dtype=tf.float32)
+            params["b5_d"] = tf.Variable(tf.random_normal((1, 1, 1, 64)), dtype=tf.float32)
 
-            params["W6_fc_d"] = tf.Variable(tf.random_normal((128, 1)), dtype=tf.float32)
-            params["b6_fc_d"] = tf.Variable(tf.random_normal((1, 1)), dtype=tf.float32)
+            params["W6_fc_d"] = tf.Variable(tf.random_normal((12*12*64, 256)), dtype=tf.float32)
+            params["b6_fc_d"] = tf.Variable(tf.random_normal((1, 256)), dtype=tf.float32)
 
-            params["W5_fc_att"] = tf.Variable(tf.random_normal((6*6*32, 128)), dtype=tf.float32)
-            params["b5_fc_att"] = tf.Variable(tf.random_normal((1, 128)), dtype=tf.float32)
+            params["W7_fc_d"] = tf.Variable(tf.random_normal((256, 64)), dtype=tf.float32)
+            params["b7_fc_d"] = tf.Variable(tf.random_normal((1, 64)), dtype=tf.float32)
 
-            params["W6_fc_att"] = tf.Variable(tf.random_normal((128, self.num_att)), dtype=tf.float32)
-            params["b6_fc_att"] = tf.Variable(tf.random_normal((1, self.num_att)), dtype=tf.float32)
+            params["W8_fc_d"] = tf.Variable(tf.random_normal((64, 1)), dtype=tf.float32)
+            params["b8_fc_d"] = tf.Variable(tf.random_normal((1, 1)), dtype=tf.float32)
+
+            params["W6_fc_att"] = tf.Variable(tf.random_normal((12*12*64, 256)), dtype=tf.float32)
+            params["b6_fc_att"] = tf.Variable(tf.random_normal((1, 256)), dtype=tf.float32)
+
+            params["W7_fc_att"] = tf.Variable(tf.random_normal((256, 64)), dtype=tf.float32)
+            params["b7_fc_att"] = tf.Variable(tf.random_normal((1, 64)), dtype=tf.float32)
+
+            params["W8_fc_att"] = tf.Variable(tf.random_normal((64, self.num_att)), dtype=tf.float32)
+            params["b8_fc_att"] = tf.Variable(tf.random_normal((1, self.num_att)), dtype=tf.float32)
             
         for k in params.keys():
             if "enc" in k or "dec" in k:

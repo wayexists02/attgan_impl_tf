@@ -32,13 +32,16 @@ class DataLoader():
         with open(ATT_PATH) as f:
             self.num_images = int(f.readline()) # num of images
             att_names = f.readline() # attribute names
-            self.att_names = att_names.split()
+            self.att_names = np.array(att_names.split())[ATT_INDEX]
             self.num_att = len(self.att_names)
+            
+            print("Selected attributes:")
+            print(self.att_names)
 
             for line in f:
                 splited = line.split()
                 file_name = os.path.join(IMAGE_PATH, splited[0]).replace("\\", "/")
-                attr = list(map(int, splited[1:]))
+                attr = np.array(list(map(int, splited[1:])))[ATT_INDEX]
 
                 self.data.append((file_name, attr))
                 
@@ -79,11 +82,11 @@ class DataLoader():
                 except:
                     print(img_path)
                 
-                img = (img - 128) / 128
+                img = (np.float32(img) - 128) / 128
                 X_src[i] = img
                 X_att_a[i] = attr_list
                 X_att_b[i, :] = -1
-                X_att_b[i, np.random.randint(self.num_att, size=10)] = 1
+                X_att_b[i, np.random.randint(self.num_att, size=1)] = 1
 
             yield X_src, X_att_a, X_att_b
 
