@@ -3,6 +3,11 @@ import numpy as np
 
 
 class D():
+    """
+    Discriminator implementation
+    
+    get 
+    """
 
     def __init__(self):
         pass

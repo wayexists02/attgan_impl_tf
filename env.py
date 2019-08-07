@@ -3,7 +3,7 @@ import numpy as np
 HEIGHT = 192
 WIDTH = 192
 BATCH_SIZE = 128
-ETA = 3e-3
+ETA = 1e-2
 EPOCHS = 100
 GP = 1e-5
 GPU_INDEX = [0, 1]

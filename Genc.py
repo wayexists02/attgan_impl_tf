@@ -3,11 +3,24 @@ import numpy as np
 
 
 class Genc():
+    """
+    G-encoder.
+    Encoder part of autoencoder
+    """
 
     def __init__(self):
         self.layers = []
 
     def build(self, X, params):
+        """
+        Build encoder part of generator.
+        
+        Arguments:
+        ----------
+        :X input tensor
+        :params parameters dictionary
+        """
+        
         with tf.name_scope("genc"):
             layer1 = self._conv_layer(X, params["W1_enc"], params["b1_enc"], 1)
             layer2 = self._conv_layer(layer1, params["W2_enc"], params["b2_enc"], 2)
@@ -20,6 +33,18 @@ class Genc():
         return layer5
 
     def _conv_layer(self, X, W, b, s, bn=True):
+        """
+        build convolution layer.
+        
+        Arguments:
+        ----------
+        :X input tensor
+        :W weight variable for this layer
+        :b bias variable for this layer
+        :s stride value
+        :bn whether batch norm will be applied
+        """
+        
         layer = tf.nn.conv2d(X, W, strides=(1, s, s, 1), padding="SAME") + b
         
         if bn is True:

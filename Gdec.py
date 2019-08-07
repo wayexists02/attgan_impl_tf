@@ -3,11 +3,24 @@ import numpy as np
 
 
 class Gdec():
+    """
+    Decoder part of generator (auto encoder)
+    """
 
     def __init__(self):
         self.layers = []
 
     def build(self, X, params, enc_layers):
+        """
+        Build G-decoder
+        
+        Arguments:
+        ----------
+        :X input tensor
+        :params parameters (weights) dictionary
+        :enc_layers layers of encoder. it is used to do skip connection
+        """
+        
         with tf.name_scope("gdec"):
             layer1 = self._dconv_layer(X, params["W1_dec"], params["b1_dec"], 2)
             layer2 = self._dconv_layer(layer1, params["W2_dec"], params["b2_dec"], 2, enc_layers[-2])
@@ -20,6 +33,20 @@ class Gdec():
         return layer5
 
     def _dconv_layer(self, X, W, b, s, skip_conn=None, bn=True):
+        """
+        build deconv layer.
+        
+        Arguments:
+        ----------
+        :X input tensor
+        :W weight variable
+        :b bias variable
+        :s stride
+        :skip_conn layer for skip connection
+        :bn whether skip connection will be added
+        """
+        
+        # retrieve useful information
         n = tf.shape(X)[0]
         h, w = X.get_shape().as_list()[1:3]
         if s == 2:
@@ -28,15 +55,19 @@ class Gdec():
 
         c = W.get_shape().as_list()[2]
 
+        # if skip connection is added, add it.
         if skip_conn is not None:
             X = tf.nn.tanh(X + skip_conn)
             
+        # apply transposed convolution
         layer = tf.nn.conv2d_transpose(X, W, (n, h, w, c), strides=(1, s, s, 1), padding="SAME") + b
 
+        # apply batch norm
         if bn is True:
             mean, var = tf.nn.moments(layer, axes=[1, 2, 3], keep_dims=True)
             layer = tf.nn.batch_normalization(layer, mean, var, None, None, 1e-8)
         
+        # activation
         layer = tf.nn.tanh(layer)
 
         return layer

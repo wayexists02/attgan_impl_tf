@@ -45,6 +45,11 @@ class DataLoader():
 
                 self.data.append((file_name, attr))
                 
+#                 if len(self.data) > 10000:
+#                     break
+                    
+            self.num_images = len(self.data)
+                
     def _check_file(self):
         num_invalid = 0
         invalid_list = []
@@ -76,11 +81,8 @@ class DataLoader():
                 img_path = self.data[i + start][0]
                 attr_list = self.data[i + start][1]
                 
-                try:
-                    img = cv2.imread(img_path)
-                    img = cv2.resize(img, dsize=(HEIGHT, WIDTH)).astype(np.float32)
-                except:
-                    print(img_path)
+                img = cv2.imread(img_path)
+                img = cv2.resize(img, dsize=(HEIGHT, WIDTH)).astype(np.float32)
                 
                 img = (np.float32(img) - 128) / 128
                 X_src[i] = img
