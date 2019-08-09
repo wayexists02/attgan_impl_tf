@@ -7,8 +7,13 @@ ETA = 1e-2
 EPOCHS = 100
 GP = 1e-5
 GPU_INDEX = [0, 1]
+NUM_DATA = 10000
 
 ATT_INDEX = np.array([4, 15, 20])
+
+SUMMARY_DIR = "./logdir"
+
+global_step = 0
 
 # DATA_PATH = "./data_sample_"
 # IMAGE_PATH = "./data_sample_/img_align_celeba/"

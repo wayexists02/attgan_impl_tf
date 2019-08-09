@@ -66,7 +66,7 @@ class AttGan():
         with self.graph.as_default():
             
             # create parameters.
-            self.params = self._init_parameters()
+            self.params, self.gparam_summ, self.dparam_summ = self._init_parameters()
             
             # tensorflow variable for gradients penalty of discriminator.
             gp = tf.Variable(GP, dtype=tf.float32)
@@ -84,6 +84,9 @@ class AttGan():
             
             loss_g_list = []
             loss_d_list = []
+            
+            g_summ = []
+            d_summ = []
             
             # construct graphs for each gpu
             for i in range(len(GPU_INDEX)):
@@ -111,15 +114,22 @@ class AttGan():
                         # add attributes to latent vector
                         Z_a = tf.concat([Z, tf.tile(tf.reshape(X_att_a, (tf.shape(X_att_a)[0], 1, 1, tf.shape(X_att_a)[1])), [1, 12, 12, 1])], axis=3)
                         Z_b = tf.concat([Z, tf.tile(tf.reshape(X_att_b, (tf.shape(X_att_b)[0], 1, 1, tf.shape(X_att_b)[1])), [1, 12, 12, 1])], axis=3)
+                        
+                        g_summ.append(self._assign_summary(f"Z_a_{i}", Z_a, tf.summary.histogram))
+                        d_summ.append(self._assign_summary(f"Z_b_{i}", Z_b, tf.summary.histogram))
 
                         # construct decoder of AE for reconstructing image with original attributes
                         dec_a = Gdec()
                         rec_a = dec_a.build(Z_a, self.params, enc.layers)
+                        
+                        d_summ.append(self._assign_summary(f"rec_a_{i}", rec_a, tf.summary.image))
 
                         # construct decoder of AE for reconstructing image with modified attributes
                         dec_b = Gdec()
                         rec_b = dec_b.build(Z_b, self.params, enc.layers)
 
+                        g_summ.append(self._assign_summary(f"rec_b_{i}", rec_b, tf.summary.image))
+                        
                         # append reconstructed image into list. Later, I concatenate them into single tensor
                         reconstructed_list.append(rec_b)
 
@@ -157,7 +167,7 @@ class AttGan():
                     
             # I will use this tensor to compute image with modified attributes.
             self.reconstructed = tf.concat(reconstructed_list, axis=0)
-            self.rec_tb = tf.summary.image("test image", self.reconstructed)
+            self.rec_tb = tf.summary.image("test_image", self.reconstructed)
                     
             # average gradients computed in each gpus to apply gradients.
             g_avg_grad_var_pair = self._average_gradients(g_grad_var_pairs)
@@ -170,13 +180,19 @@ class AttGan():
             # final loss for generator and discriminator
             self.loss_g = tf.reduce_mean(loss_g_list)
             self.loss_d = tf.reduce_mean(loss_d_list)
+            
+            g_summ.append(self._assign_summary("loss_g", self.loss_g, tf.summary.scalar))
+            d_summ.append(self._assign_summary("loss_d", self.loss_d, tf.summary.scalar))
 
             # open session and, initialize variables.
             self.sess = tf.Session()
             self.sess.run(tf.global_variables_initializer())
             
-            tf.summary.FileWriter("./logdir/", self.graph)
-            self.rec_rb = tf.summary.merge_all()
+            with tf.device("/cpu:0"):
+                self.summary_writer = tf.summary.FileWriter(SUMMARY_DIR, self.graph)
+                self.summaries_g = tf.summary.merge([self.gparam_summ, *g_summ])
+                self.summaries_d = tf.summary.merge([self.dparam_summ, *d_summ])
+                self.summaries_test = tf.summary.merge([self.rec_tb])
 
             # create saver object.
             self.saver = tf.train.Saver()
@@ -219,6 +235,11 @@ class AttGan():
             # gradient descent operation. compute losses
             _, loss_g = self.sess.run([self.op_train_g, self.loss_g], feed_dict=feed_dict)
             _, loss_d = self.sess.run([self.op_train_d, self.loss_d], feed_dict=feed_dict)
+            
+            summ_g, summ_d = self.sess.run([self.summaries_g, self.summaries_d], feed_dict=feed_dict)
+            
+            self.summary_writer.add_summary(summ_g, global_step)
+            self.summary_writer.add_summary(summ_d, global_step)
 
         return loss_g, loss_d
 
@@ -247,7 +268,9 @@ class AttGan():
                 feed_dict[k] = X_att_dict[k]
                 
             # compute reconstructed images with given attributes
-            reconstructed, _ = self.sess.run([self.reconstructed, self.rec_tb], feed_dict=feed_dict)
+            reconstructed, summ_test = self.sess.run([self.reconstructed, self.summaries_test], feed_dict=feed_dict)
+            
+            self.summary_writer.add_summary(summ_test, global_step)
 
         return reconstructed
     
@@ -370,68 +393,68 @@ class AttGan():
         params = dict()
 
         with tf.name_scope("params"):
-            params["W1_enc"] = tf.Variable(tf.random_normal((5, 5, 3, 16)), dtype=tf.float32)
-            params["b1_enc"] = tf.Variable(tf.random_normal((1, 1, 1, 16)), dtype=tf.float32)
+            params["W1_enc"] = tf.Variable(tf.random_normal((5, 5, 3, 16)), dtype=tf.float32, name="W1_enc")
+            params["b1_enc"] = tf.Variable(tf.random_normal((1, 1, 1, 16)), dtype=tf.float32, name="b1_enc")
 
-            params["W2_enc"] = tf.Variable(tf.random_normal((5, 5, 16, 16)), dtype=tf.float32)
-            params["b2_enc"] = tf.Variable(tf.random_normal((1, 1, 1, 16)), dtype=tf.float32)
+            params["W2_enc"] = tf.Variable(tf.random_normal((5, 5, 16, 16)), dtype=tf.float32, name="W2_enc")
+            params["b2_enc"] = tf.Variable(tf.random_normal((1, 1, 1, 16)), dtype=tf.float32, name="b2_enc")
             
-            params["W3_enc"] = tf.Variable(tf.random_normal((5, 5, 16, 32)), dtype=tf.float32)
-            params["b3_enc"] = tf.Variable(tf.random_normal((1, 1, 1, 32)), dtype=tf.float32)
+            params["W3_enc"] = tf.Variable(tf.random_normal((5, 5, 16, 32)), dtype=tf.float32, name="W3_enc")
+            params["b3_enc"] = tf.Variable(tf.random_normal((1, 1, 1, 32)), dtype=tf.float32, name="b3_enc")
             
-            params["W4_enc"] = tf.Variable(tf.random_normal((5, 5, 32, 32)), dtype=tf.float32)
-            params["b4_enc"] = tf.Variable(tf.random_normal((1, 1, 1, 32)), dtype=tf.float32)
+            params["W4_enc"] = tf.Variable(tf.random_normal((5, 5, 32, 32)), dtype=tf.float32, name="W4_enc")
+            params["b4_enc"] = tf.Variable(tf.random_normal((1, 1, 1, 32)), dtype=tf.float32, name="b4_enc")
             
-            params["W5_enc"] = tf.Variable(tf.random_normal((5, 5, 32, 64)), dtype=tf.float32)
-            params["b5_enc"] = tf.Variable(tf.random_normal((1, 1, 1, 64)), dtype=tf.float32)
+            params["W5_enc"] = tf.Variable(tf.random_normal((5, 5, 32, 64)), dtype=tf.float32, name="W5_enc")
+            params["b5_enc"] = tf.Variable(tf.random_normal((1, 1, 1, 64)), dtype=tf.float32, name="b5_enc")
 
-            params["W1_dec"] = tf.Variable(tf.random_normal((5, 5, 32, 64+self.num_att)), dtype=tf.float32)
-            params["b1_dec"] = tf.Variable(tf.random_normal((1, 1, 1, 32)), dtype=tf.float32)
+            params["W1_dec"] = tf.Variable(tf.random_normal((5, 5, 32, 64+self.num_att)), dtype=tf.float32, name="W1_dec")
+            params["b1_dec"] = tf.Variable(tf.random_normal((1, 1, 1, 32)), dtype=tf.float32, name="b1_dec")
 
-            params["W2_dec"] = tf.Variable(tf.random_normal((5, 5, 32, 32)), dtype=tf.float32)
-            params["b2_dec"] = tf.Variable(tf.random_normal((1, 1, 1, 32)), dtype=tf.float32)
+            params["W2_dec"] = tf.Variable(tf.random_normal((5, 5, 32, 32)), dtype=tf.float32, name="W2_dec")
+            params["b2_dec"] = tf.Variable(tf.random_normal((1, 1, 1, 32)), dtype=tf.float32, name="b2_dec")
 
-            params["W3_dec"] = tf.Variable(tf.random_normal((5, 5, 16, 32)), dtype=tf.float32)
-            params["b3_dec"] = tf.Variable(tf.random_normal((1, 1, 1, 16)), dtype=tf.float32)
+            params["W3_dec"] = tf.Variable(tf.random_normal((5, 5, 16, 32)), dtype=tf.float32, name="W3_dec")
+            params["b3_dec"] = tf.Variable(tf.random_normal((1, 1, 1, 16)), dtype=tf.float32, name="b3_dec")
 
-            params["W4_dec"] = tf.Variable(tf.random_normal((5, 5, 16, 16)), dtype=tf.float32)
-            params["b4_dec"] = tf.Variable(tf.random_normal((1, 1, 1, 16)), dtype=tf.float32)
+            params["W4_dec"] = tf.Variable(tf.random_normal((5, 5, 16, 16)), dtype=tf.float32, name="W4_dec")
+            params["b4_dec"] = tf.Variable(tf.random_normal((1, 1, 1, 16)), dtype=tf.float32, name="b4_dec")
 
-            params["W5_dec"] = tf.Variable(tf.random_normal((5, 5, 3, 16)), dtype=tf.float32)
-            params["b5_dec"] = tf.Variable(tf.random_normal((1, 1, 1, 3)), dtype=tf.float32)
+            params["W5_dec"] = tf.Variable(tf.random_normal((5, 5, 3, 16)), dtype=tf.float32, name="W5_dec")
+            params["b5_dec"] = tf.Variable(tf.random_normal((1, 1, 1, 3)), dtype=tf.float32, name="b5_dec")
             
-            params["W1_d"] = tf.Variable(tf.random_normal((5, 5, 3, 16)), dtype=tf.float32)
-            params["b1_d"] = tf.Variable(tf.random_normal((1, 1, 1, 16)), dtype=tf.float32)
+            params["W1_d"] = tf.Variable(tf.random_normal((5, 5, 3, 16)), dtype=tf.float32, name="W1_d")
+            params["b1_d"] = tf.Variable(tf.random_normal((1, 1, 1, 16)), dtype=tf.float32, name="b1_d")
 
-            params["W2_d"] = tf.Variable(tf.random_normal((5, 5, 16, 16)), dtype=tf.float32)
-            params["b2_d"] = tf.Variable(tf.random_normal((1, 1, 1, 16)), dtype=tf.float32)
+            params["W2_d"] = tf.Variable(tf.random_normal((5, 5, 16, 16)), dtype=tf.float32, name="W2_d")
+            params["b2_d"] = tf.Variable(tf.random_normal((1, 1, 1, 16)), dtype=tf.float32, name="b2_d")
 
-            params["W3_d"] = tf.Variable(tf.random_normal((5, 5, 16, 32)), dtype=tf.float32)
-            params["b3_d"] = tf.Variable(tf.random_normal((1, 1, 1, 32)), dtype=tf.float32)
+            params["W3_d"] = tf.Variable(tf.random_normal((5, 5, 16, 32)), dtype=tf.float32, name="W3_d")
+            params["b3_d"] = tf.Variable(tf.random_normal((1, 1, 1, 32)), dtype=tf.float32, name="b3_d")
 
-            params["W4_d"] = tf.Variable(tf.random_normal((5, 5, 32, 32)), dtype=tf.float32)
-            params["b4_d"] = tf.Variable(tf.random_normal((1, 1, 1, 32)), dtype=tf.float32)
+            params["W4_d"] = tf.Variable(tf.random_normal((5, 5, 32, 32)), dtype=tf.float32, name="W4_d")
+            params["b4_d"] = tf.Variable(tf.random_normal((1, 1, 1, 32)), dtype=tf.float32, name="b4_d")
 
-            params["W5_d"] = tf.Variable(tf.random_normal((5, 5, 32, 64)), dtype=tf.float32)
-            params["b5_d"] = tf.Variable(tf.random_normal((1, 1, 1, 64)), dtype=tf.float32)
+            params["W5_d"] = tf.Variable(tf.random_normal((5, 5, 32, 64)), dtype=tf.float32, name="W5_d")
+            params["b5_d"] = tf.Variable(tf.random_normal((1, 1, 1, 64)), dtype=tf.float32, name="b5_d")
 
-            params["W6_fc_d"] = tf.Variable(tf.random_normal((12*12*64, 256)), dtype=tf.float32)
-            params["b6_fc_d"] = tf.Variable(tf.random_normal((1, 256)), dtype=tf.float32)
+            params["W6_fc_d"] = tf.Variable(tf.random_normal((12*12*64, 256)), dtype=tf.float32, name="W6_fc_d")
+            params["b6_fc_d"] = tf.Variable(tf.random_normal((1, 256)), dtype=tf.float32, name="b6_fc_d")
 
-            params["W7_fc_d"] = tf.Variable(tf.random_normal((256, 64)), dtype=tf.float32)
-            params["b7_fc_d"] = tf.Variable(tf.random_normal((1, 64)), dtype=tf.float32)
+            params["W7_fc_d"] = tf.Variable(tf.random_normal((256, 64)), dtype=tf.float32, name="W7_fc_d")
+            params["b7_fc_d"] = tf.Variable(tf.random_normal((1, 64)), dtype=tf.float32, name="b7_fc_d")
 
-            params["W8_fc_d"] = tf.Variable(tf.random_normal((64, 1)), dtype=tf.float32)
-            params["b8_fc_d"] = tf.Variable(tf.random_normal((1, 1)), dtype=tf.float32)
+            params["W8_fc_d"] = tf.Variable(tf.random_normal((64, 1)), dtype=tf.float32, name="W8_fc_d")
+            params["b8_fc_d"] = tf.Variable(tf.random_normal((1, 1)), dtype=tf.float32, name="b8_fc_d")
 
-            params["W6_fc_att"] = tf.Variable(tf.random_normal((12*12*64, 256)), dtype=tf.float32)
-            params["b6_fc_att"] = tf.Variable(tf.random_normal((1, 256)), dtype=tf.float32)
+            params["W6_fc_att"] = tf.Variable(tf.random_normal((12*12*64, 256)), dtype=tf.float32, name="W6_fc_att")
+            params["b6_fc_att"] = tf.Variable(tf.random_normal((1, 256)), dtype=tf.float32, name="b6_fc_att")
 
-            params["W7_fc_att"] = tf.Variable(tf.random_normal((256, 64)), dtype=tf.float32)
-            params["b7_fc_att"] = tf.Variable(tf.random_normal((1, 64)), dtype=tf.float32)
+            params["W7_fc_att"] = tf.Variable(tf.random_normal((256, 64)), dtype=tf.float32, name="W7_fc_att")
+            params["b7_fc_att"] = tf.Variable(tf.random_normal((1, 64)), dtype=tf.float32, name="b7_fc_att")
 
-            params["W8_fc_att"] = tf.Variable(tf.random_normal((64, self.num_att)), dtype=tf.float32)
-            params["b8_fc_att"] = tf.Variable(tf.random_normal((1, self.num_att)), dtype=tf.float32)
+            params["W8_fc_att"] = tf.Variable(tf.random_normal((64, self.num_att)), dtype=tf.float32, name="W8_fc_att")
+            params["b8_fc_att"] = tf.Variable(tf.random_normal((1, self.num_att)), dtype=tf.float32, name="b8_fc_att")
             
         # assign variables into each parameters list
         for k in params.keys():
@@ -439,8 +462,14 @@ class AttGan():
                 self.Gparams.append(params[k])
             else:
                 self.Dparams.append(params[k])
+                
+        for gparam in self.Gparams:
+            gparams_summaries = self._assign_summary(gparam.name.replace(":", "_"), gparam, tf.summary.histogram)
 
-        return params
+        for dparam in self.Dparams:
+            dparams_summaries = self._assign_summary(dparam.name.replace(":", "_"), dparam, tf.summary.histogram)
+            
+        return params, gparams_summaries, dparams_summaries
     
     def _init_placeholder(self):
         with tf.name_scope("in"):
@@ -450,3 +479,8 @@ class AttGan():
 
         return X_src, X_att_a, X_att_b
 
+    def _assign_summary(self, name, tensor, summ_func):
+        with tf.device("/cpu:0"):
+            summ = summ_func(name, tensor)
+            
+        return summ

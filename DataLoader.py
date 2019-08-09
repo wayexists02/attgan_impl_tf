@@ -45,8 +45,8 @@ class DataLoader():
 
                 self.data.append((file_name, attr))
                 
-#                 if len(self.data) > 10000:
-#                     break
+                if len(self.data) > NUM_DATA:
+                    break
                     
             self.num_images = len(self.data)
                 
