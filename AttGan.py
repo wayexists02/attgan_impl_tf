@@ -42,6 +42,8 @@ class AttGan():
         self.X_att_b = []         # list of placeholder of modified attributes. length of this array should be same as number of available gpus
         
         self.reconstructed = None # tensor for generating image with modified attributes
+        
+        self.global_step = 0
 
     def __del__(self):
         """
@@ -122,13 +124,13 @@ class AttGan():
                         dec_a = Gdec()
                         rec_a = dec_a.build(Z_a, self.params, enc.layers)
                         
-                        d_summ.append(self._assign_summary(f"rec_a_{i}", rec_a, tf.summary.image))
+                        d_summ.append(self._assign_summary(f"rec_a_{i}", tf.reverse(rec_a, axis=[-1]), tf.summary.image))
 
                         # construct decoder of AE for reconstructing image with modified attributes
                         dec_b = Gdec()
                         rec_b = dec_b.build(Z_b, self.params, enc.layers)
 
-                        g_summ.append(self._assign_summary(f"rec_b_{i}", rec_b, tf.summary.image))
+                        g_summ.append(self._assign_summary(f"rec_b_{i}", tf.reverse(rec_b, axis=[-1]), tf.summary.image))
                         
                         # append reconstructed image into list. Later, I concatenate them into single tensor
                         reconstructed_list.append(rec_b)
@@ -148,13 +150,14 @@ class AttGan():
 
                         # compute loss tensor
                         rec_loss = tf.reduce_mean((rec_a - X_src)**2) + tf.reduce_mean((rec_b - X_src)**2)   # reconstruction loss for auto encoder
+                        vae_loss = enc.loss_function()
                         gen_d_loss = tf.reduce_mean((_d_a - 1)**2) + tf.reduce_mean((_d_b - 1)**2)           # adversarial loss for generator
                         dis_d_loss = tf.reduce_mean((_d_a + 1)**2) + tf.reduce_mean((_d_b + 1)**2)           # adversarial loss for discriminator
                         att_loss_a = tf.reduce_mean((att_a - X_att_a)**2)                                    # attributes cross entropy for predicting original attributes
                         att_loss_b = tf.reduce_mean((att_b - X_att_b)**2)                                    # attributes cross entropy for predicting modified attributes
 
-                        loss_g = 15.0*rec_loss + 10.0*att_loss_b + 1.0*gen_d_loss                            # construct generator loss
-                        loss_d = 1.0*dis_d_loss + 10.0*att_loss_a + 15.0*(gp**2)                             # construct discriminator loss
+                        loss_g = 10.0*rec_loss + 5.0*vae_loss + 5.0*att_loss_b + 1.0*gen_d_loss                            # construct generator loss
+                        loss_d = 1.0*dis_d_loss + 5.0*att_loss_a + 10.0*(gp**2)                             # construct discriminator loss
 
                         loss_g_list.append(loss_g)                                                           # add losses to list to collect them into single gpu
                         loss_d_list.append(loss_d)                                                           # add losses to list to collect them into single gpu
@@ -167,7 +170,7 @@ class AttGan():
                     
             # I will use this tensor to compute image with modified attributes.
             self.reconstructed = tf.concat(reconstructed_list, axis=0)
-            self.rec_tb = tf.summary.image("test_image", self.reconstructed)
+            self.rec_tb = tf.summary.image("test_image", tf.reverse(self.reconstructed, axis=[-1]))
                     
             # average gradients computed in each gpus to apply gradients.
             g_avg_grad_var_pair = self._average_gradients(g_grad_var_pairs)
@@ -238,8 +241,10 @@ class AttGan():
             
             summ_g, summ_d = self.sess.run([self.summaries_g, self.summaries_d], feed_dict=feed_dict)
             
-            self.summary_writer.add_summary(summ_g, global_step)
-            self.summary_writer.add_summary(summ_d, global_step)
+            self.summary_writer.add_summary(summ_g, self.global_step)
+            self.summary_writer.add_summary(summ_d, self.global_step)
+            
+            self.global_step += 1
 
         return loss_g, loss_d
 
@@ -270,7 +275,7 @@ class AttGan():
             # compute reconstructed images with given attributes
             reconstructed, summ_test = self.sess.run([self.reconstructed, self.summaries_test], feed_dict=feed_dict)
             
-            self.summary_writer.add_summary(summ_test, global_step)
+            self.summary_writer.add_summary(summ_test, self.global_step)
 
         return reconstructed
     
@@ -407,6 +412,12 @@ class AttGan():
             
             params["W5_enc"] = tf.Variable(tf.random_normal((5, 5, 32, 64)), dtype=tf.float32, name="W5_enc")
             params["b5_enc"] = tf.Variable(tf.random_normal((1, 1, 1, 64)), dtype=tf.float32, name="b5_enc")
+            
+            params["W6_enc_mean"] = tf.Variable(tf.random_normal((5, 5, 64, 64)), dtype=tf.float32, name="W6_enc_mean")
+            params["b6_enc_mean"] = tf.Variable(tf.random_normal((1, 1, 1, 64)), dtype=tf.float32, name="b6_enc_mean")
+            
+            params["W6_enc_var"] = tf.Variable(tf.random_normal((5, 5, 64, 64)), dtype=tf.float32, name="W6_enc_var")
+            params["b6_enc_var"] = tf.Variable(tf.random_normal((1, 1, 1, 64)), dtype=tf.float32, name="b6_enc_var")
 
             params["W1_dec"] = tf.Variable(tf.random_normal((5, 5, 32, 64+self.num_att)), dtype=tf.float32, name="W1_dec")
             params["b1_dec"] = tf.Variable(tf.random_normal((1, 1, 1, 32)), dtype=tf.float32, name="b1_dec")

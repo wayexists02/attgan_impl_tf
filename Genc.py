@@ -26,11 +26,25 @@ class Genc():
             layer2 = self._conv_layer(layer1, params["W2_enc"], params["b2_enc"], 2)
             layer3 = self._conv_layer(layer2, params["W3_enc"], params["b3_enc"], 2)
             layer4 = self._conv_layer(layer3, params["W4_enc"], params["b4_enc"], 2)
-            layer5 = self._conv_layer(layer4, params["W5_enc"], params["b5_enc"], 2, bn=False)
+            layer5 = self._conv_layer(layer4, params["W5_enc"], params["b5_enc"], 2)
+            
+            self.mean = self._conv_layer(layer5, params["W6_enc_mean"], params["b6_enc_mean"], 1, bn=False)
+            self.logvar = self._conv_layer(layer5, params["W6_enc_var"], params["b6_enc_var"], 1, bn=False)
+            
+            std = tf.math.exp(self.logvar*0.5)
+            normal = tf.distributions.Normal(loc=self.mean, scale=std)
+            
+            std_dist = normal.sample()
+            
+            latent = std_dist * std + self.mean
 
             self.layers.extend([layer1, layer2, layer3, layer4, layer5])
 
-        return layer5
+        return latent
+    
+    def loss_function(self):
+        loss = 0.5 * (tf.math.exp(self.logvar) + self.mean**2 - self.logvar - 1)
+        return loss
 
     def _conv_layer(self, X, W, b, s, bn=True):
         """
