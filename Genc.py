@@ -28,15 +28,13 @@ class Genc():
             layer4 = self._conv_layer(layer3, params["W4_enc"], params["b4_enc"], 2)
             layer5 = self._conv_layer(layer4, params["W5_enc"], params["b5_enc"], 2)
             
-            self.mean = self._conv_layer(layer5, params["W6_enc_mean"], params["b6_enc_mean"], 1, bn=False)
-            self.logvar = self._conv_layer(layer5, params["W6_enc_var"], params["b6_enc_var"], 1, bn=False)
+            self.mean = self._conv_layer(layer5, params["W6_enc_mean"], params["b6_enc_mean"], 1, bn=False, actv=tf.nn.tanh)
+            self.logvar = self._conv_layer(layer5, params["W6_enc_var"], params["b6_enc_var"], 1, bn=False, actv=tf.nn.sigmoid)
             
             std = tf.math.exp(self.logvar*0.5)
-            normal = tf.distributions.Normal(loc=self.mean, scale=std)
+            normal = tf.random_normal(tf.shape(std), dtype=tf.float32)
             
-            std_dist = normal.sample()
-            
-            latent = std_dist * std + self.mean
+            latent = normal * std + self.mean
 
             self.layers.extend([layer1, layer2, layer3, layer4, layer5])
 
@@ -44,9 +42,9 @@ class Genc():
     
     def loss_function(self):
         loss = 0.5 * (tf.math.exp(self.logvar) + self.mean**2 - self.logvar - 1)
-        return loss
+        return tf.reduce_mean(loss)
 
-    def _conv_layer(self, X, W, b, s, bn=True):
+    def _conv_layer(self, X, W, b, s, bn=True, actv=tf.nn.tanh):
         """
         build convolution layer.
         
@@ -65,7 +63,8 @@ class Genc():
             mean, var = tf.nn.moments(layer, axes=[1, 2, 3], keep_dims=True)
             layer = tf.nn.batch_normalization(layer, mean, var, None, None, 1e-8)
 
-        layer = tf.nn.tanh(layer)
+        if actv is not None:
+            layer = actv(layer)
 
         return layer
 

@@ -32,7 +32,7 @@ class Gdec():
 
         return layer5
 
-    def _dconv_layer(self, X, W, b, s, skip_conn=None, bn=True):
+    def _dconv_layer(self, X, W, b, s, skip_conn=None, bn=True, actv=tf.nn.tanh, skip_conn_actv=tf.nn.tanh):
         """
         build deconv layer.
         
@@ -57,7 +57,9 @@ class Gdec():
 
         # if skip connection is added, add it.
         if skip_conn is not None:
-            X = tf.nn.tanh(X + skip_conn)
+            X = X + skip_conn
+            if skip_conn_actv is not None:
+                X = skip_conn_actv(X)
             
         # apply transposed convolution
         layer = tf.nn.conv2d_transpose(X, W, (n, h, w, c), strides=(1, s, s, 1), padding="SAME") + b
@@ -68,6 +70,7 @@ class Gdec():
             layer = tf.nn.batch_normalization(layer, mean, var, None, None, 1e-8)
         
         # activation
-        layer = tf.nn.tanh(layer)
+        if actv is not None:
+            layer = actv(layer)
 
         return layer
