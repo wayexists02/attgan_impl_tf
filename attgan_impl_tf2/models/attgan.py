@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 
 from tensorflow.keras import layers, models
+from settings import *
 from . import gen_dec, gen_enc, discriminator
 
 

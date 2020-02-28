@@ -19,19 +19,29 @@ test_dloader = dataloader.DataLoader("test", BATCH_SIZE)
 
 model = attgan.AttGAN()
 
-criterion_reconstruction = losses.MeanAbsoluteError()
+# criterion_reconstruction = losses.MeanAbsoluteError()
 # criterion_adversarial = losses.BinaryCrossentropy()
-criterion_attribute = losses.BinaryCrossentropy()
+# criterion_attribute = losses.BinaryCrossentropy()
 
-# def criterion_attribute(y_true, y_pred):
-#     n = y_true.shape[0]
+def criterion_MAE(y_true, y_pred):
+    n = y_true.shape[0]
 
-#     loss = - y_true * tf.math.log(y_pred + 1e-8) - (1 - y_true) * tf.math.log(1 - y_pred + 1e-8)
-#     loss = tf.reshape(loss, (n, -1))
-#     loss = tf.reduce_sum(loss, axis=1)
-#     loss = tf.reduce_mean(loss)
+    loss = tf.math.abs(y_true - y_pred)
+    loss = tf.reshape(loss, shape=(n, -1))
+    loss = tf.reduce_sum(loss, axis=-1)
+    loss = tf.reduce_mean(loss)
 
-#     return loss
+    return loss
+
+def criterion_BCE(y_true, y_pred):
+    n = y_true.shape[0]
+
+    loss = - y_true * tf.math.log(y_pred + 1e-8) - (1 - y_true) * tf.math.log(1 - y_pred + 1e-8)
+    loss = tf.reshape(loss, (n, -1))
+    loss = tf.reduce_sum(loss, axis=1)
+    loss = tf.reduce_mean(loss)
+
+    return loss
 
 optimizer = optimizers.Adam(learning_rate=ETA)
 
@@ -43,21 +53,36 @@ print("Logging into " + log_file)
 
 def generator_loss(x, a, b, x_rec_a, x_rec_b, d_x, d_rec_a, d_rec_b, c_x, c_rec_a, c_rec_b):
     n = x.shape[0]
-    loss_rec = criterion_reconstruction(x, x_rec_a)
-    loss_adv_gen = -d_rec_b
-    loss_att_gen = criterion_attribute(a, c_rec_a) + criterion_attribute(b, c_rec_b)
+
+    loss_rec = criterion_MAE(x, x_rec_a)
+    loss_adv_gen = tf.reduce_mean(-d_rec_b, axis=0)
+    loss_att_gen = criterion_BCE(a, c_rec_a) + criterion_BCE(b, c_rec_b)
     
     loss_gen = loss_rec*100 + loss_adv_gen + loss_att_gen
+
+    print("GENERATOR")
+    print("LOSS_GEN:", loss_gen)
+    # print("REC:", loss_rec)
+    # print("ADV:", loss_adv_gen)
+    # print("ATT:", loss_att_gen)
+    # print()
     
     return loss_gen
 
 def discriminator_loss(x, a, b, x_rec_a, x_rec_b, d_x, d_rec_a, d_rec_b, c_x, c_rec_a, c_rec_b):
-    loss_adv_dis = -d_x + d_rec_b
-    loss_att_dis = criterion_attribute(a, c_x)
+    loss_adv_dis = tf.reduce_mean(-d_x + d_rec_b, axis=0)
+    loss_att_dis = criterion_BCE(a, c_x)
 
     gp = utils.wgan_gp(x, x_rec_b, model.disc)
     
     loss_dis = loss_adv_dis + loss_att_dis + 10*gp
+
+    print("DISCRIMINATOR")
+    print("LOSS_DIS:", loss_dis)
+    # print("ADV:", loss_adv_dis)
+    # print("ATT:", loss_att_dis)
+    # print("GP:", gp)
+    # print()
     
     return loss_dis
 
@@ -69,6 +94,8 @@ def inference(x, a, training=False):
     x_rec_a, c_rec_a, d_rec_a = model(x, a, training=training)
     x_rec_b, c_rec_b, d_rec_b = model(x, b, training=training)
     c_x, d_x = model.disc(x, training=training)
+
+    # print(c_x)
     
     loss_gen = generator_loss(x, a, b, x_rec_a, x_rec_b, d_x, d_rec_a, d_rec_b, c_x, c_rec_a, c_rec_b)
     loss_dis = discriminator_loss(x, a, b, x_rec_a, x_rec_b, d_x, d_rec_a, d_rec_b, c_x, c_rec_a, c_rec_b)

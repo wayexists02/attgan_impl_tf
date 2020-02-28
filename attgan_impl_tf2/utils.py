@@ -15,12 +15,10 @@ def wgan_gp(x_origin, x_reconstructed, D):
     with tf.GradientTape() as tape:
         tape.watch(samples)
         _, d = D(samples, training=True)
-        d = tf.reshape(d, (n, 1, 1, 1))
 
-    grad = tape.gradient(d, samples)
-    grad = tf.reshape(grad, (n, -1))
-    norm = tf.norm(grad + 1e-6, axis=-1)
-    gp = tf.reduce_mean((norm - 1)**2)
+    grad = tape.gradient(d, [samples])[0]
+    norm = tf.sqrt(tf.reduce_sum(tf.square(grad), axis=[1, 2, 3]))
+    gp = tf.reduce_mean((norm - 1.0)**2)
 
     # print(gp)
 

@@ -2,6 +2,8 @@ import tensorflow as tf
 import numpy as np
 
 from tensorflow.keras import models, layers
+from functools import partial
+from settings import *
 
 
 class Genc(models.Model):
@@ -10,11 +12,11 @@ class Genc(models.Model):
         super(Genc, self).__init__(*args, **kwargs)
 
         self.encoders = [
-            self._conv_module(32, 5),
-            self._conv_module(64, 5),
-            self._conv_module(96, 5),
-            self._conv_module(128, 5),
-            self._conv_module(128, 5, None),
+            self._conv_module(32, 5, actv=tf.nn.leaky_relu, batch_norm=True),
+            self._conv_module(64, 5, actv=tf.nn.leaky_relu, batch_norm=True),
+            self._conv_module(96, 5, actv=tf.nn.leaky_relu, batch_norm=True),
+            self._conv_module(128, 5, actv=tf.nn.leaky_relu, batch_norm=True),
+            self._conv_module(128, 5, actv=None),
         ]
 
     def call(self, inputs, training=False):
@@ -31,15 +33,23 @@ class Genc(models.Model):
 
         return x, skip_conn
 
-    def _conv_module(self, n, f, actv=tf.nn.leaky_relu):
-        if actv is not None:
-            return models.Sequential([
-                layers.Conv2D(n, (f, f), strides=2, padding="SAME"),
-                layers.BatchNormalization(),
-                layers.Activation(actv),
-            ])
+    def _conv_module(self, n, f, actv=None, input_shape=None, batch_norm=False, dropout=False):
+        if input_shape is None:
+            conv = partial(layers.Conv2D)
         else:
-            return models.Sequential([
-                layers.Conv2D(n, (f, f), strides=2, padding="SAME"),
-                layers.BatchNormalization(),
-            ])
+            conv = partial(layers.Conv2D, input_shape=input_shape)
+
+        modules = [
+            conv(n, (f, f), strides=2, padding="SAME")
+        ]
+
+        if batch_norm is True:
+            modules.append(layers.BatchNormalization())
+
+        if actv is not None:
+            modules.append(layers.Activation(actv))
+
+        if dropout is True:
+            modules.append(layers.Dropout(0.5))
+
+        return models.Sequential(modules)

@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 
 from tensorflow.keras import layers, models
+from functools import partial
 
 from settings import *
 
@@ -12,22 +13,22 @@ class Discriminator(models.Model):
         super(Discriminator, self).__init__(*args, **kwargs)
 
         self.features = models.Sequential([
-            self._conv_module(32, 3),
-            self._conv_module(64, 3),
-            self._conv_module(96, 3),
-            self._conv_module(128, 3),
-            self._conv_module(128, 3),
+            self._conv_module(32, 3, actv=tf.nn.leaky_relu, batch_norm=True),
+            self._conv_module(64, 3, actv=tf.nn.leaky_relu, batch_norm=True),
+            self._conv_module(96, 3, actv=tf.nn.leaky_relu, batch_norm=True),
+            self._conv_module(128, 3, actv=tf.nn.leaky_relu, batch_norm=True),
+            self._conv_module(128, 3, actv=tf.nn.leaky_relu, batch_norm=True),
         ])
 
         self.classifier = models.Sequential([
-            self._fc_module(256),
-            self._fc_module(64),
+            self._fc_module(256, actv=tf.nn.leaky_relu, dropout=True),
+            self._fc_module(64, actv=tf.nn.leaky_relu, dropout=True),
             self._fc_module(NUM_ATT, actv=tf.nn.sigmoid),
         ])
 
         self.discriminator = models.Sequential([
-            self._fc_module(256),
-            self._fc_module(64),
+            self._fc_module(256, actv=tf.nn.leaky_relu, dropout=True),
+            self._fc_module(64, actv=tf.nn.leaky_relu, dropout=True),
             self._fc_module(1, actv=tf.nn.sigmoid),
         ])
 
@@ -41,28 +42,44 @@ class Discriminator(models.Model):
         d = self.discriminator(x, training=training)
         return c, d
 
-    def _conv_module(self, n, f, actv=tf.nn.leaky_relu):
-        if actv is not None:
-            return models.Sequential([
-                layers.Conv2D(n, (f, f), strides=2, padding="SAME"),
-                layers.BatchNormalization(),
-                layers.Activation(actv),
-            ])
+    def _conv_module(self, n, f, actv=None, input_shape=None, batch_norm=False, dropout=False):
+        if input_shape is None:
+            conv = partial(layers.Conv2D)
         else:
-            return models.Sequential([
-                layers.Conv2D(n, (f, f), strides=2, padding="SAME"),
-                layers.BatchNormalization(),
-            ])
+            conv = partial(layers.Conv2D, input_shape=input_shape)
 
-    def _fc_module(self, n, actv=tf.nn.leaky_relu):
-        if type(actv) is not tf.nn.sigmoid:
-            return models.Sequential([
-                layers.Dense(n),
-                layers.Activation(actv),
-                layers.Dropout(0.5)
-            ])
+        modules = [
+            conv(n, (f, f), strides=2, padding="SAME"),
+        ]
+
+        if batch_norm is True:
+            modules.append(layers.BatchNormalization())
+
+        if actv is not None:
+            modules.append(layers.Activation(actv))
+
+        if dropout is True:
+            modules.append(layers.Dropout(0.5))
+
+        return models.Sequential(modules)
+
+    def _fc_module(self, n, actv=None, input_shape=None, batch_norm=False, dropout=False):
+        if input_shape is None:
+            dense = partial(layers.Dense)
         else:
-            return models.Sequential([
-                layers.Dense(n),
-                layers.Activation(actv)
-            ])
+            dense = partial(layers.Dense, input_shape=input_shape)
+
+        modules = [
+            dense(n)
+        ]
+
+        if batch_norm is True:
+            modules.append(layers.BatchNormalization())
+
+        if actv is not None:
+            modules.append(layers.Activation(actv))
+
+        if dropout is True:
+            modules.append(layers.Dropout(0.5))
+
+        return models.Sequential(modules)
