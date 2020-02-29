@@ -19,6 +19,7 @@ class Gdec(models.Model):
             self._conv_transpose_module(3, 5, actv=tf.nn.tanh),
         ]
 
+    @tf.function
     def call(self, inputs, skip_conn, training=False):
 
         x = inputs

@@ -15,14 +15,16 @@ class AttGAN(models.Model):
         self.decoder = gen_dec.Gdec()
         self.disc = discriminator.Discriminator()
 
+    @tf.function
     def call(self, inputs, att, training=False):
         z, skip_conn = self.encoder(inputs, training=training)
-
+        
         mean = z[:, :, :, :64]
         logvar = z[:, :, :, 64:]
-
+        
         sample_z = self._reparameterize(mean, logvar)
         att_sample_z = self._add_attribute(sample_z, att)
+        
         reconstructed = self.decoder(att_sample_z, skip_conn, training=training)
 
         c, d = self.disc(reconstructed, training=training)

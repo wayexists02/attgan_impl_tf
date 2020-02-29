@@ -19,6 +19,7 @@ class Genc(models.Model):
             self._conv_module(128, 5, actv=None),
         ]
 
+    @tf.function
     def call(self, inputs, training=False):
 
         x = inputs

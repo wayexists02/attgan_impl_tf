@@ -3,7 +3,10 @@ import matplotlib.pyplot as plt
 import pickle
 import cv2
 
-from settings import *
+HEIGHT = 224
+WIDTH = 224
+CHANNEL = 3
+NUM_ATT = 40
 
 
 class DataLoader():

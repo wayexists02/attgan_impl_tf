@@ -51,7 +51,7 @@ loss_mean_dis = metrics.Mean()
 log_file = sys.argv[1]
 print("Logging into " + log_file)
 
-def generator_loss(x, a, b, x_rec_a, x_rec_b, d_x, d_rec_a, d_rec_b, c_x, c_rec_a, c_rec_b):
+def generator_loss(x, a, b, x_rec_a, x_rec_b, d_x, d_rec_a, d_rec_b, c_x, c_rec_a, c_rec_b, training=False):
     n = x.shape[0]
 
     loss_rec = criterion_MAE(x, x_rec_a)
@@ -69,13 +69,15 @@ def generator_loss(x, a, b, x_rec_a, x_rec_b, d_x, d_rec_a, d_rec_b, c_x, c_rec_
     
     return loss_gen
 
-def discriminator_loss(x, a, b, x_rec_a, x_rec_b, d_x, d_rec_a, d_rec_b, c_x, c_rec_a, c_rec_b):
+def discriminator_loss(x, a, b, x_rec_a, x_rec_b, d_x, d_rec_a, d_rec_b, c_x, c_rec_a, c_rec_b, training=False):
     loss_adv_dis = tf.reduce_mean(-d_x + d_rec_b, axis=0)
     loss_att_dis = criterion_BCE(a, c_x)
 
-    gp = utils.wgan_gp(x, x_rec_b, model.disc)
-    
-    loss_dis = loss_adv_dis + loss_att_dis + 10*gp
+    if training is True:
+        gp = utils.wgan_gp(x, x_rec_b, model.disc)
+        loss_dis = loss_adv_dis + loss_att_dis + 10*gp
+    else:
+        loss_dis = loss_adv_dis + loss_att_dis
 
     print("DISCRIMINATOR")
     print("LOSS_DIS:", loss_dis)
@@ -97,8 +99,8 @@ def inference(x, a, training=False):
 
     # print(c_x)
     
-    loss_gen = generator_loss(x, a, b, x_rec_a, x_rec_b, d_x, d_rec_a, d_rec_b, c_x, c_rec_a, c_rec_b)
-    loss_dis = discriminator_loss(x, a, b, x_rec_a, x_rec_b, d_x, d_rec_a, d_rec_b, c_x, c_rec_a, c_rec_b)
+    loss_gen = generator_loss(x, a, b, x_rec_a, x_rec_b, d_x, d_rec_a, d_rec_b, c_x, c_rec_a, c_rec_b, training=training)
+    loss_dis = discriminator_loss(x, a, b, x_rec_a, x_rec_b, d_x, d_rec_a, d_rec_b, c_x, c_rec_a, c_rec_b, training=training)
 
     return loss_gen, loss_dis
 

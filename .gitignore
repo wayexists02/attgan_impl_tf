@@ -6,5 +6,5 @@
 **/data*/
 **/__pycache__/
 **/.ipynb_checkpoints/
-**/train_attgan.ipynb
-**/train_attgan2.ipynb
+attgan_impl_tf/train_attgan.ipynb
+attgan_impl_tf/train_attgan2.ipynb
