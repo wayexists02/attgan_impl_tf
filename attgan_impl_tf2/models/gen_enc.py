@@ -12,11 +12,11 @@ class Genc(models.Model):
         super(Genc, self).__init__(*args, **kwargs)
 
         self.encoders = [
-            self._conv_module(32, 5, actv=tf.nn.leaky_relu, batch_norm=True),
             self._conv_module(64, 5, actv=tf.nn.leaky_relu, batch_norm=True),
-            self._conv_module(96, 5, actv=tf.nn.leaky_relu, batch_norm=True),
             self._conv_module(128, 5, actv=tf.nn.leaky_relu, batch_norm=True),
-            self._conv_module(128, 5, actv=None),
+            self._conv_module(256, 5, actv=tf.nn.leaky_relu, batch_norm=True),
+            self._conv_module(512, 5, actv=tf.nn.leaky_relu, batch_norm=True),
+            self._conv_module(1024*2, 5, actv=tf.nn.leaky_relu, batch_norm=True),
         ]
 
     @tf.function
@@ -30,7 +30,9 @@ class Genc(models.Model):
             skip_conn.append(x)
 
         skip_conn[0] = None
-        skip_conn[-1] = None
+        skip_conn[2] = None
+        skip_conn[3] = None
+        skip_conn[4] = None
 
         return x, skip_conn
 

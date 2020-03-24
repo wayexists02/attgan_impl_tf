@@ -8,3 +8,4 @@
 **/.ipynb_checkpoints/
 attgan_impl_tf/train_attgan.ipynb
 attgan_impl_tf/train_attgan2.ipynb
+**/*.pyc

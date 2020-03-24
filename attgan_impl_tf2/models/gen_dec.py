@@ -12,15 +12,15 @@ class Gdec(models.Model):
         super(Gdec, self).__init__(*args, **kwargs)
 
         self.decoders = [
+            self._conv_transpose_module(512, 5, actv=tf.nn.leaky_relu, batch_norm=True),
+            self._conv_transpose_module(256, 5, actv=tf.nn.leaky_relu, batch_norm=True),
             self._conv_transpose_module(128, 5, actv=tf.nn.leaky_relu, batch_norm=True),
-            self._conv_transpose_module(96, 5, actv=tf.nn.leaky_relu, batch_norm=True),
             self._conv_transpose_module(64, 5, actv=tf.nn.leaky_relu, batch_norm=True),
-            self._conv_transpose_module(32, 5, actv=tf.nn.leaky_relu, batch_norm=True),
             self._conv_transpose_module(3, 5, actv=tf.nn.tanh),
         ]
 
     @tf.function
-    def call(self, inputs, skip_conn, training=False):
+    def call(self, inputs, skip_conn, att, training=False):
 
         x = inputs
 
@@ -52,3 +52,13 @@ class Gdec(models.Model):
             modules.append(layers.Dropout(0.5))
 
         return models.Sequential(modules)
+
+    def _add_attribute(self, sample_z, att):
+        n = tf.shape(sample_z)[0]
+        h = tf.shape(sample_z)[1]
+        w = tf.shape(sample_z)[2]
+
+        att_tiled = tf.tile(tf.reshape(att, (n, 1, 1, -1)), [1, h, w, 1])
+        att_sample_z = tf.concat([sample_z, att_tiled], axis=-1)
+
+        return att_sample_z

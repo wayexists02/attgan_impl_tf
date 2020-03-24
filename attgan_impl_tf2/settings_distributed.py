@@ -1,5 +1,5 @@
 ETA = 1e-5
-EPOCHS = 100
+EPOCHS = 50
 BATCH_SIZE = 64
 
 HEIGHT = 224
@@ -8,6 +8,6 @@ CHANNEL = 3
 
 NUM_ATT = 40
 
-CUDA_DEVICE = 1
+CUDA_DEVICES = [1, 2]
 
 LOG_FILE = "train_log10.txt"
