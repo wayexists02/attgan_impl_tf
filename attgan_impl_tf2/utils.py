@@ -5,22 +5,28 @@ import time
 import shutil
 import pathlib
 
+from settings import *
 
-def wgan_gp(x_origin, x_reconstructed, D):
+
+def wgan_gp(x_origin, x_reconstructed, D, num_samples):
     n = x_origin.shape[0]
-    r = tf.random.uniform(minval=0.0, maxval=1.0, shape=(n, 1, 1, 1))
-
+    r = tf.random.uniform(minval=0.0, maxval=1.0, shape=(num_samples*n, 1, 1, 1))
+    
+    x_origin = tf.tile(x_origin, [num_samples, 1, 1, 1])
+    x_reconstructed = tf.tile(x_reconstructed, [num_samples, 1, 1, 1])
+    
     samples = x_origin*r + x_reconstructed*(1 - r)
 
     with tf.GradientTape() as tape:
         tape.watch(samples)
-        _, d = D(samples, training=False)
+        _, d = D(samples, training=True)
 
     grad = tape.gradient(d, [samples])[0]
-    norm = tf.sqrt(tf.reduce_sum(tf.square(grad), axis=[1, 2, 3]))
+    grad = tf.reshape(grad, shape=(n*num_samples, -1))
+    norm = tf.sqrt(tf.reduce_sum(grad**2, axis=-1))
     gp = tf.reduce_mean((norm - 1.0)**2)
 
-    # print(gp)
+#     print(gp)
 
     return gp
 

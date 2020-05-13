@@ -2,11 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pickle
 import cv2
-
-HEIGHT = 224
-WIDTH = 224
-CHANNEL = 3
-NUM_ATT = 40
+from settings import *
 
 
 class DataLoader():
@@ -42,9 +38,9 @@ class DataLoader():
             for i in range(start, end):
                 filepath, att = dataset[i]
                 img = self._load_image(filepath)
-                
+
                 x_batch[i - start] = img
-                att_a_batch[i - start] = list(map(lambda item: 1.0 if item == 1 else 0.0, att))
+                att_a_batch[i - start] = att.astype(np.float32)
                 
             att_b_batch = self._generate_attribute(att_a_batch)
 
@@ -60,8 +56,8 @@ class DataLoader():
         img = plt.imread(path)
         img = cv2.resize(img, dsize=(HEIGHT, WIDTH))
 
-        img = (img.astype(np.float32) - 128) / 256
-        # img = img.astype(np.float32) / 256
+        # img = (img.astype(np.float32) - 128) / 256
+        img = img.astype(np.float32) / 256
 
         return img
     

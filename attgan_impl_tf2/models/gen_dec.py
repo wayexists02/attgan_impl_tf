@@ -12,14 +12,13 @@ class Gdec(models.Model):
         super(Gdec, self).__init__(*args, **kwargs)
 
         self.decoders = [
-            self._conv_transpose_module(512, 5, actv=tf.nn.leaky_relu, batch_norm=True),
             self._conv_transpose_module(256, 5, actv=tf.nn.leaky_relu, batch_norm=True),
             self._conv_transpose_module(128, 5, actv=tf.nn.leaky_relu, batch_norm=True),
             self._conv_transpose_module(64, 5, actv=tf.nn.leaky_relu, batch_norm=True),
-            self._conv_transpose_module(3, 5, actv=tf.nn.tanh),
+            self._conv_transpose_module(32, 5, actv=tf.nn.leaky_relu, batch_norm=True),
+            self._conv_transpose_module(3, 5, actv=tf.nn.sigmoid),
         ]
 
-    @tf.function
     def call(self, inputs, skip_conn, att, training=False):
 
         x = inputs

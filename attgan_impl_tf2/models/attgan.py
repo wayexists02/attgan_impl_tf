@@ -15,12 +15,11 @@ class AttGAN(models.Model):
         self.decoder = gen_dec.Gdec()
         self.disc = discriminator.Discriminator()
 
-    @tf.function
     def call(self, inputs, att, training=False):
         z, skip_conn = self.encoder(inputs, training=training)
         
-        mean = z[:, :, :, :1024]
-        logvar = z[:, :, :, 1024:]
+        mean = z[:, :, :, :512]
+        logvar = z[:, :, :, 512:]
         
         sample_z = self._reparameterize(mean, logvar)
         att_sample_z = self._add_attribute(sample_z, att)
@@ -31,15 +30,15 @@ class AttGAN(models.Model):
 
         return reconstructed, c, d
     
-    def train_mode(self, mode):
-        if mode == "generator":
-            self.encoder.trainable = True
-            self.decoder.trainable = True
-            self.disc.trainable = False
-        elif mode == "discriminator":
-            self.encoder.trainable = False
-            self.decoder.trainable = False
-            self.disc.trainable = True
+#     def train_mode(self, mode):
+#         if mode == "generator":
+#             self.encoder.trainable = True
+#             self.decoder.trainable = True
+#             self.disc.trainable = False
+#         elif mode == "discriminator":
+#             self.encoder.trainable = False
+#             self.decoder.trainable = False
+#             self.disc.trainable = True
 
     def _reparameterize(self, mean, logvar):
         r = tf.random.normal(tf.shape(mean))

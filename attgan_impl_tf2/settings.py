@@ -1,13 +1,13 @@
-ETA = 1e-5
+ETA = 1e-4
 EPOCHS = 100
-BATCH_SIZE = 64
+BATCH_SIZE = 16
 
 HEIGHT = 224
 WIDTH = 224
 CHANNEL = 3
 
-NUM_ATT = 40
+NUM_ATT = 6
 
 CUDA_DEVICE = 1
 
-LOG_FILE = "train_log10.txt"
+LOG_FILE = "train_log11.txt"
